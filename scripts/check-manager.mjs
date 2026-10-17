@@ -2,9 +2,13 @@ import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
 import { Script } from 'node:vm';
 const html=readFileSync('index.html','utf8');
-const scripts=[...html.matchAll(/<script[^>]*>([\\s\\S]*?)<\\/script>/gi)].map(match=>match[1]).filter(text=>text.trim());
-assert.equal(scripts.length,1,'expected one inline application script');
-const app=scripts[0];
+const openingTags=[...html.matchAll(/<script[^>]*>/gi)];
+const inlineTags=openingTags.filter(match=>!match[0].includes('src='));
+assert.equal(inlineTags.length,1,'expected one inline application script');
+const start=inlineTags[0].index+inlineTags[0][0].length;
+const end=html.indexOf('</script>',start);
+assert.notEqual(end,-1,'inline script must close');
+const app=html.slice(start,end);
 new Script(app,{filename:'store-manager-inline.js'});
 for(const area of ['products','campaigns','orders']) {
   assert.ok(app.includes('if(!persist(STORAGE.'+area+','),'writes to '+area+' must handle storage failure');
