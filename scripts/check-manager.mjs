@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
-import { Script } from 'node:vm';
+import { Script, runInNewContext } from 'node:vm';
 const html=readFileSync('index.html','utf8');
 const openingTags=[...html.matchAll(/<script[^>]*>/gi)];
 const inlineTags=openingTags.filter(match=>!match[0].includes('src='));
@@ -16,4 +16,18 @@ for(const area of ['products','campaigns','orders']) {
 assert.match(app,/if\(!persist\(STORAGE\.orders,data\.orders\)\)\{order\.status=previousStatus;select\.value=previousStatus;return\}/);
 assert.ok(!app.includes('persist(STORAGE.products,data.products);closeProductModal()'));
 assert.ok(!app.includes('persist(STORAGE.campaigns,data.campaigns);renderMarketing()'));
+const persistStart=app.indexOf('function persist(');
+const persistEnd=app.indexOf('\n',persistStart);
+assert.ok(persistStart>=0&&persistEnd>persistStart,'persistence helper must exist');
+const persistSource=app.slice(persistStart,persistEnd);
+const notices=[];
+const blockedContext={localStorage:{setItem(){throw new Error('storage unavailable')}},showToast(message){notices.push(message)}};
+runInNewContext(persistSource,blockedContext);
+assert.equal(blockedContext.persist('key',{value:1}),false);
+assert.deepEqual(notices,['تعذر الحفظ على هذا الجهاز']);
+const values={};
+const workingContext={localStorage:{setItem(key,value){values[key]=value}},showToast(){assert.fail('successful save must not show an error')}};
+runInNewContext(persistSource,workingContext);
+assert.equal(workingContext.persist('key',{value:1}),true);
+assert.deepEqual(JSON.parse(values.key),{value:1});
 console.log('Store Manager inline syntax and persistence checks passed');
